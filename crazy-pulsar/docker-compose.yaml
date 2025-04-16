@@ -1,0 +1,138 @@
+version: '3.8'
+name: pulsar
+networks:
+  pulsar:
+    driver: bridge
+volumes:
+  zookeeper:
+  pulsar-manager:
+  bookkeeper:
+
+services:
+  # Start zookeeper
+  zookeeper:
+    image: apachepulsar/pulsar:latest
+    container_name: zookeeper
+    restart: on-failure
+    ports:
+      - "2181:2181"
+    networks:
+      - pulsar
+    volumes:
+      - zookeeper:/pulsar/data
+    environment:
+      - metadataStoreUrl=zk:${ZK_HOST}
+      - PULSAR_MEM=-Xms256m -Xmx256m -XX:MaxDirectMemorySize=256m
+    command: >
+      bash -c "bin/apply-config-from-env.py conf/zookeeper.conf && \
+             bin/generate-zookeeper-config.sh conf/zookeeper.conf && \
+             exec bin/pulsar zookeeper"
+    healthcheck:
+      test: [ "CMD", "bin/pulsar-zookeeper-ruok.sh" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # Init cluster metadata
+  pulsar-init:
+    container_name: pulsar-init
+    hostname: pulsar-init
+    image: apachepulsar/pulsar:latest
+    networks:
+      - pulsar
+    command: >
+      bash -c "bin/pulsar initialize-cluster-metadata \
+      --cluster ${PULSAR_CLUSTER_NAME} \
+      --zookeeper ${ZK_HOST} \
+      --configuration-store ${ZK_HOST} \
+      --web-service-url http://broker:8080 \
+      --broker-service-url pulsar://broker:6650"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+  # Start bookie
+  bookie:
+    image: apachepulsar/pulsar:latest
+    container_name: bookie
+    restart: on-failure
+    #    bookie啟動時會自己測試advertise address 是否可連接...
+    ports:
+      - "3181:3181"
+    networks:
+      - pulsar
+    environment:
+      - bookiePort=3181
+      - clusterName=${PULSAR_CLUSTER_NAME}
+      - zkServers=${ZK_HOST}
+      - metadataServiceUri=metadata-store:zk:${ZK_HOST}
+      # otherwise every time we run docker compose uo or down we fail to start due to Cookie
+      # See: https://github.com/apache/bookkeeper/blob/405e72acf42bb1104296447ea8840d805094c787/bookkeeper-server/src/main/java/org/apache/bookkeeper/bookie/Cookie.java#L57-68
+      - advertisedAddress=${BOOKIE_ADVERTISE_HOST}
+      - bookieId=bookie-1
+      #      bookieId不能隨便更換!
+      - BOOKIE_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+    # Map the local directory to the container to avoid bookie startup failure due to insufficient container disks.
+    volumes:
+      - bookkeeper:/pulsar/data
+    command: bash -c "bin/apply-config-from-env.py conf/bookkeeper.conf && exec bin/pulsar bookie"
+
+  # Start broker
+  broker:
+    image: apachepulsar/pulsar:latest
+    container_name: broker
+    hostname: broker
+    restart: on-failure
+    networks:
+      - pulsar
+    #      advertise 是 export info(ip/port) for out of vm instants who what to connect  to broker instance...
+    environment:
+      - metadataStoreUrl=zk:${ZK_HOST}
+      - zookeeperServers=${ZK_HOST}
+      - clusterName=${PULSAR_CLUSTER_NAME}
+      - managedLedgerDefaultEnsembleSize=1
+      - managedLedgerDefaultWriteQuorum=1
+      - managedLedgerDefaultAckQuorum=1
+      - advertisedAddress=${BROKER_ADVERTISE_URL:-127.0.87.87:9487}
+      - advertisedListeners=external:pulsar://${BROKER_ADVERTISE_URL:-127.0.87.87:9487}:6650
+      - PULSAR_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      bookie:
+        condition: service_started
+    ports:
+      - "6650:6650"
+      - "8080:8080"
+    command: bash -c "bin/apply-config-from-env.py conf/broker.conf && exec bin/pulsar broker"
+  # Pulsar Manager (Admin UI)
+  pulsar-manager:
+    image: apachepulsar/pulsar-manager:latest
+    container_name: pulsar-manager
+    restart: unless-stopped
+    ports:
+      - "9527:9527" # Pulsar Manager UI port
+      - "7750:7750"
+    environment:
+      SPRING_CONFIGURATION_FILE: /pulsar-manager/pulsar-manager/application.properties
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRESQL}/pulsar_manager
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    volumes:
+      - pulsar-manager:/data
+      - ./pulsar-manager-conf/application.properties:/pulsar-manager/pulsar-manager/application.properties
+    depends_on:
+      broker:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9527" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - pulsar
+

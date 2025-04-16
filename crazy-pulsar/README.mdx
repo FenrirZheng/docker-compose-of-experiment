@@ -1,0 +1,69 @@
+# 創admin使用者
+```shell
+CSRF_TOKEN=$(curl http://localhost:7750/pulsar-manager/csrf-token)
+curl \
+   -H 'X-XSRF-TOKEN: $CSRF_TOKEN' \
+   -H 'Cookie: XSRF-TOKEN=$CSRF_TOKEN;' \
+   -H "Content-Type: application/json" \
+   -X PUT http://localhost:7750/pulsar-manager/users/superuser \
+   -d '{"name": "admin", "password": "apachepulsar", "description": "test", "email": "username@test.org"}'
+```
+
+---
+# broker
+
+## metadataServiceUri
+
+在 Pulsar broker 設定中，`metadataServiceUri` 是一個重要的配置參數，它指定了 Pulsar broker 如何連接到 metadata 服務。
+
+對於 Pulsar broker，`metadataServiceUri` 應該指定為：
+
+1. 如果使用 ZooKeeper 作為 metadata 存儲：
+
+```
+zk://zookeeper-hostname:port/path
+   ```
+
+2. 如果使用 etcd 作為 metadata 存儲：
+```
+etcd://etcd-hostname:port
+   ```
+
+例如，如果您使用 ZooKeeper，且運行在同一台機器上的默認埠口 2181，設定可能是：
+```
+metadataServiceUri=zk://localhost:2181
+```
+
+如果您有多個 ZooKeeper 伺服器組成集群，則可以這樣設定：
+```
+metadataServiceUri=zk://zk1:2181,zk2:2181,zk3:2181
+```
+
+這個參數通常在 `broker.conf` 或 `standalone.conf` 文件中設定，具體取決於您的部署模式。
+
+請確保所有的 Pulsar broker 都使用相同的 `metadataServiceUri` 配置，以確保它們都連接到同一個 metadata 儲存系統。
+
+
+---
+
+# metadataStoreUrl
+
+https://pulsar.apache.org/docs/next/administration-metadata-store/
+
+Use ZooKeeper as a metadata store
+Pulsar metadata store can be deployed on a separate ZooKeeper cluster or deployed on an existing ZooKeeper cluster.
+
+To use ZooKeeper as the metadata store, add the following parameters to the conf/broker.conf or conf/standalone.conf file.
+
+```
+metadataStoreUrl=zk:my-zk-1:2181,my-zk-2:2181,my-zk-3:2181
+configurationMetadataStoreUrl=zk:my-global-zk-1:2181,my-global-zk-2:2181,my-global-zk-3:2181
+```
+
+Use etcd as a metadata store
+To use etcd as the metadata store, add the following parameters to the conf/broker.conf or conf/standalone.conf file.
+
+```
+metadataStoreUrl=etcd:http://my-etcd-1:2379,http://my-etcd-2:2379,http://my-etcd-3:2379
+configurationMetadataStoreUrl=etcd:my-global-etcd-1:2379,my-global-etcd-2:2379,my-global-etcd-3:2379
+```
