@@ -1,0 +1,82 @@
+version: '3.8'
+name: pulsar
+networks:
+  pulsar-net:
+    driver: bridge
+    external: true
+volumes:
+  pulsar-manager:
+
+services:
+  # Start broker
+  broker1:
+    image: apachepulsar/pulsar:latest
+    container_name: broker1
+    hostname: broker1
+    restart: on-failure
+    networks:
+      - pulsar-net
+    #      advertise 是 export info(ip/port) for out of vm instants who what to connect  to broker instance...
+    environment:
+      - brokerServicePort=${BROKER1_BROKER_PORT}
+      - webServicePort=${BROKER1_WEB_PORT}
+      - metadataStoreUrl=zk:${ZK_HOST}
+      - zookeeperServers=${ZK_HOST}
+      - clusterName=${PULSAR_CLUSTER_NAME}
+      - managedLedgerDefaultEnsembleSize=1
+      - managedLedgerDefaultWriteQuorum=1
+      - managedLedgerDefaultAckQuorum=1
+      - advertisedAddress=${BROKER_ADVERTISE_URL:-127.0.87.87:9487}
+      - advertisedListeners=external:pulsar://${BROKER_ADVERTISE_URL:-127.0.87.87:9487}:6650
+      - PULSAR_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    ports:
+      - ${BROKER1_BROKER_PORT}:${BROKER1_BROKER_PORT}
+      - ${BROKER1_WEB_PORT}:${BROKER1_WEB_PORT}
+    command: bash -c "bin/apply-config-from-env.py conf/broker.conf && exec bin/pulsar broker"
+  broker2:
+    image: apachepulsar/pulsar:latest
+    container_name: broker2
+    hostname: broker2
+    restart: on-failure
+    networks:
+      - pulsar-net
+    #      advertise 是 export info(ip/port) for out of vm instants who what to connect  to broker instance...
+    environment:
+      - brokerServicePort=${BROKER2_BROKER_PORT}
+      - webServicePort=${BROKER2_WEB_PORT}
+      - metadataStoreUrl=zk:${ZK_HOST}
+      - zookeeperServers=${ZK_HOST}
+      - clusterName=${PULSAR_CLUSTER_NAME}
+      - managedLedgerDefaultEnsembleSize=1
+      - managedLedgerDefaultWriteQuorum=1
+      - managedLedgerDefaultAckQuorum=1
+      - advertisedAddress=${BROKER_ADVERTISE_URL:-127.0.87.87:9487}
+      - advertisedListeners=external:pulsar://${BROKER_ADVERTISE_URL:-127.0.87.87:9487}:${BROKER2_BROKER_PORT}
+      - PULSAR_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    ports:
+      - ${BROKER2_BROKER_PORT}:${BROKER2_BROKER_PORT}
+      - ${BROKER2_WEB_PORT}:${BROKER2_WEB_PORT}
+    command: bash -c "bin/apply-config-from-env.py conf/broker.conf && exec bin/pulsar broker"
+  broker3:
+    image: apachepulsar/pulsar:latest
+    container_name: broker3
+    hostname: broker3
+    restart: on-failure
+    networks:
+      - pulsar-net
+    environment:
+      - brokerServicePort=${BROKER3_BROKER_PORT}
+      - webServicePort=${BROKER3_WEB_PORT}
+      - metadataStoreUrl=zk:${ZK_HOST}
+      - zookeeperServers=${ZK_HOST}
+      - clusterName=${PULSAR_CLUSTER_NAME}
+      - managedLedgerDefaultEnsembleSize=1
+      - managedLedgerDefaultWriteQuorum=1
+      - managedLedgerDefaultAckQuorum=1
+      - advertisedAddress=${BROKER_ADVERTISE_URL:-127.0.87.87:9487}
+      - advertisedListeners=external:pulsar://${BROKER_ADVERTISE_URL:-127.0.87.87:9487}:${BROKER3_BROKER_PORT}
+      - PULSAR_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    ports:
+      - ${BROKER3_BROKER_PORT}:${BROKER3_BROKER_PORT}
+      - ${BROKER3_WEB_PORT}:${BROKER3_WEB_PORT}
+    command: bash -c "bin/apply-config-from-env.py conf/broker.conf && exec bin/pulsar broker"

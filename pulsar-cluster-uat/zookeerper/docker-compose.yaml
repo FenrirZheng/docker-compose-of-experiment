@@ -1,0 +1,144 @@
+# zookeeper-compose.yml
+# 此檔案用於設定一個高可用性的 ZooKeeper 叢集，包含三個節點
+# ZooKeeper 是一個分散式協調服務，用於管理 Kafka 的叢集狀態、配置和領導者選舉
+# 這個設定檔創建了一個三節點的 ZooKeeper 叢集，提供冗餘和高可用性
+
+# 定義 Docker Compose 專案名稱
+name: zookeeper
+
+# 定義持久化存儲卷
+volumes:
+  # 為每個 ZooKeeper 節點定義數據和日誌卷
+  zookeeper1_data:
+    driver: local
+  zookeeper1_log:
+    driver: local
+  zookeeper2_data:
+    driver: local
+  zookeeper2_log:
+    driver: local
+  zookeeper3_data:
+    driver: local
+  zookeeper3_log:
+    driver: local
+
+networks:
+  pulsar-net:
+    # 使用 bridge 驅動，這是 Docker 的標準網路驅動
+    driver: bridge
+    # external: false 表示這個網路由 Docker Compose 管理，不是外部已存在的網路
+    external: true
+
+# 服務定義區段，包含所有的 ZooKeeper 節點
+services:
+  # 第一個 ZooKeeper 節點
+  zookeeper1:
+    # 使用 Confluent 的 ZooKeeper 映像檔，latest 表示最新版本
+    image: confluentinc/cp-zookeeper:latest
+    # 容器名稱設定為 zookeeper1
+    container_name: zookeeper1
+    # 設定容器的主機名稱，用於節點間通訊
+    hostname: zookeeper1
+    # 將容器連接到 kafka-net 網路
+    networks:
+      - pulsar-net
+    # 掛載持久化存儲卷
+    volumes:
+      # 掛載數據目錄
+      - zookeeper1_data:/var/lib/zookeeper/data
+      # 掛載日誌目錄
+      - zookeeper1_log:/var/lib/zookeeper/log
+    # 端口映射配置
+    ports:
+      # 客戶端連接端口，將容器內的 2181 端口映射到主機的 2181 端口
+      - "2191:2181"
+    #      # 用於 ZooKeeper 節點間通訊的端口，2888 用於節點間數據同步
+    #      - "2898:2888"
+    #      # 3888 端口用於領導者選舉
+    #      - "3898:3888"
+    # 環境變數配置
+    environment:
+      # 設定 ZooKeeper 客戶端連接的端口
+      ZOOKEEPER_CLIENT_PORT: 2181
+      # 設定 ZooKeeper 的基本時間單位（毫秒），用於心跳和會話超時
+      ZOOKEEPER_TICK_TIME: 2000
+      # 設定 ZooKeeper 服務器的唯一 ID
+      ZOOKEEPER_SERVER_ID: 1
+      # 初始同步階段的超時時間，以 TICK_TIME 為單位
+      ZOOKEEPER_INIT_LIMIT: 5
+      # 發送請求和接收確認的超時時間，以 TICK_TIME 為單位
+      ZOOKEEPER_SYNC_LIMIT: 2
+      # 定義 ZooKeeper 叢集中的所有服務器，格式為 server:通訊端口:選舉端口
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888
+
+  # 第二個 ZooKeeper 節點
+  zookeeper2:
+    # 使用與 zookeeper1 相同的映像檔
+    image: confluentinc/cp-zookeeper:latest
+    # 容器名稱設定為 zookeeper2
+    container_name: zookeeper2
+    # 設定容器的主機名稱
+    hostname: zookeeper2
+    # 將容器連接到 kafka-net 網路
+    networks:
+      - pulsar-net
+    # 掛載持久化存儲卷
+    volumes:
+      # 掛載數據目錄
+      - zookeeper2_data:/var/lib/zookeeper/data
+      # 掛載日誌目錄
+      - zookeeper2_log:/var/lib/zookeeper/log
+    # 端口映射配置，注意端口號與 zookeeper1 不同，避免衝突
+    ports:
+      # 客戶端連接端口，映射到主機的 2182 端口
+      - "2192:2181"
+    #      # 節點間通訊端口，映射到主機的 2889 端口
+    #      - "2899:2888"
+    #      # 領導者選舉端口，映射到主機的 3889 端口
+    #      - "3899:3888"
+    # 環境變數配置，大部分與 zookeeper1 相同
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      # 服務器 ID 設為 2，確保在叢集中唯一
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      # 定義相同的 ZooKeeper 叢集配置
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888
+
+  # 第三個 ZooKeeper 節點
+  zookeeper3:
+    # 使用與其他節點相同的映像檔
+    image: confluentinc/cp-zookeeper:latest
+    # 容器名稱設定為 zookeeper3
+    container_name: zookeeper3
+    # 設定容器的主機名稱
+    hostname: zookeeper3
+    # 將容器連接到 kafka-net 網路
+    networks:
+      - pulsar-net
+    # 掛載持久化存儲卷
+    volumes:
+      # 掛載數據目錄
+      - zookeeper3_data:/var/lib/zookeeper/data
+      # 掛載日誌目錄
+      - zookeeper3_log:/var/lib/zookeeper/log
+    # 端口映射配置，使用不同的主機端口避免衝突
+    ports:
+      # 客戶端連接端口，映射到主機的 2183 端口
+      - "2193:2181"
+    #      # 節點間通訊端口，映射到主機的 2890 端口
+    #      - "2891:2888"
+    #      # 領導者選舉端口，映射到主機的 3890 端口
+    #      - "3891:3888"
+    # 環境變數配置
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      # 服務器 ID 設為 3，確保在叢集中唯一
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      # 定義相同的 ZooKeeper 叢集配置
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888

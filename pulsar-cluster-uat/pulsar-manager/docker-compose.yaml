@@ -1,0 +1,34 @@
+version: '3.8'
+name: pulsar
+networks:
+  pulsar-net:
+    driver: bridge
+    external: true
+volumes:
+  pulsar-manager:
+
+services:
+  # Pulsar Manager (Admin UI)
+  pulsar-manager:
+    image: apachepulsar/pulsar-manager:latest
+    container_name: pulsar-manager
+    restart: unless-stopped
+    ports:
+      - "9527:9527" # Pulsar Manager UI port
+      - "7750:7750"
+    environment:
+      SPRING_CONFIGURATION_FILE: /pulsar-manager/pulsar-manager/application.properties
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRESQL}/pulsar_manager
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    volumes:
+      - pulsar-manager:/data
+      - ./pulsar-manager-conf/application.properties:/pulsar-manager/pulsar-manager/application.properties
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9527" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - pulsar-net
+

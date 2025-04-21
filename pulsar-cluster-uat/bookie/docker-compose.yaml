@@ -1,0 +1,100 @@
+version: '3.8'
+name: pulsar
+networks:
+  pulsar-net:
+    driver: bridge
+    external: true
+volumes:
+  bookkeeper1:
+  bookkeeper2:
+  bookkeeper3:
+
+services:
+  # Init cluster metadata
+  pulsar-init:
+    image: apachepulsar/pulsar:latest
+    networks:
+      - pulsar-net
+    command: >
+      bash -c "bin/pulsar initialize-cluster-metadata \
+      --cluster ${PULSAR_CLUSTER_NAME} \
+      --zookeeper ${ZK_HOST} \
+      --configuration-store ${ZK_HOST} \
+      --web-service-url http://${BROKER_ADVERTISE_URL}:${BROKER1_WEB_PORT},http://${BROKER_ADVERTISE_URL}:${BROKER2_WEB_PORT},http://${BROKER_ADVERTISE_URL}:${BROKER3_WEB_PORT} \
+      --broker-service-url pulsar://${BROKER_ADVERTISE_URL}:${BROKER1_BROKER_PORT},pulsar://${BROKER_ADVERTISE_URL}:${BROKER2_BROKER_PORT},pulsar://${BROKER_ADVERTISE_URL}:${BROKER3_BROKER_PORT}"
+  # Start bookie
+  bookie1:
+    image: apachepulsar/pulsar:latest
+    container_name: bookie1
+    restart: on-failure
+    #    bookie啟動時會自己測試advertise address 是否可連接...
+    ports:
+      - ${BOOKIE1_PORT}:${BOOKIE1_PORT}
+    networks:
+      - pulsar-net
+    environment:
+      - bookiePort=${BOOKIE1_PORT}
+      - clusterName=${PULSAR_CLUSTER_NAME}
+      - zkServers=${ZK_SERVERS}
+      - metadataServiceUri=metadata-store:zk:${ZK_HOST}
+      # otherwise every time we run docker compose uo or down we fail to start due to Cookie
+      # See: https://github.com/apache/bookkeeper/blob/405e72acf42bb1104296447ea8840d805094c787/bookkeeper-server/src/main/java/org/apache/bookkeeper/bookie/Cookie.java#L57-68
+      - advertisedAddress=${BOOKIE_ADVERTISE_HOST}
+      - bookieId=bookie1
+      #      bookieId不能隨便更換!
+      - BOOKIE_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    depends_on:
+      pulsar-init:
+        condition: service_completed_successfully
+    # Map the local directory to the container to avoid bookie startup failure due to insufficient container disks.
+    volumes:
+      - bookkeeper1:/pulsar/data
+    command: bash -c "bin/apply-config-from-env.py conf/bookkeeper.conf && exec bin/pulsar bookie"
+  bookie2:
+    image: apachepulsar/pulsar:latest
+    container_name: bookie2
+    restart: on-failure
+    #    bookie啟動時會自己測試advertise address 是否可連接...
+    ports:
+      - ${BOOKIE2_PORT}:${BOOKIE2_PORT}
+    networks:
+      - pulsar-net
+    environment:
+      - bookiePort=${BOOKIE2_PORT}
+      - clusterName=${PULSAR_CLUSTER_NAME}
+      - zkServers=${ZK_SERVERS}
+      - metadataServiceUri=metadata-store:zk:${ZK_HOST}
+      # otherwise every time we run docker compose uo or down we fail to start due to Cookie
+      # See: https://github.com/apache/bookkeeper/blob/405e72acf42bb1104296447ea8840d805094c787/bookkeeper-server/src/main/java/org/apache/bookkeeper/bookie/Cookie.java#L57-68
+      - advertisedAddress=${BOOKIE_ADVERTISE_HOST}
+      - bookieId=bookie2
+      #      bookieId不能隨便更換!
+      - BOOKIE_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    # Map the local directory to the container to avoid bookie startup failure due to insufficient container disks.
+    volumes:
+      - bookkeeper2:/pulsar/data
+    command: bash -c "bin/apply-config-from-env.py conf/bookkeeper.conf && exec bin/pulsar bookie"
+  bookie3:
+    image: apachepulsar/pulsar:latest
+    container_name: bookie3
+    restart: on-failure
+    #    bookie啟動時會自己測試advertise address 是否可連接...
+    ports:
+      - ${BOOKIE3_PORT}:${BOOKIE3_PORT}
+    networks:
+      - pulsar-net
+    environment:
+      - bookiePort=${BOOKIE3_PORT}
+      - clusterName=${PULSAR_CLUSTER_NAME}
+      - zkServers=${ZK_SERVERS}
+      - metadataServiceUri=metadata-store:zk:${ZK_HOST}
+      # otherwise every time we run docker compose uo or down we fail to start due to Cookie
+      # See: https://github.com/apache/bookkeeper/blob/405e72acf42bb1104296447ea8840d805094c787/bookkeeper-server/src/main/java/org/apache/bookkeeper/bookie/Cookie.java#L57-68
+      - advertisedAddress=${BOOKIE_ADVERTISE_HOST}
+      - bookieId=bookie3
+      #      bookieId不能隨便更換!
+      - BOOKIE_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    # Map the local directory to the container to avoid bookie startup failure due to insufficient container disks.
+    volumes:
+      - bookkeeper3:/pulsar/data
+    command: bash -c "bin/apply-config-from-env.py conf/bookkeeper.conf && exec bin/pulsar bookie"
